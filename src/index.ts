@@ -103,7 +103,8 @@ const GetListEntriesSchema = z.object({
 const UpdateFieldValueSchema = z.object({
   field_id: z.number(),
   entity_id: z.number(),
-  value: z.unknown()
+  value: z.unknown(),
+  list_entry_id: z.number().optional()
 }).strict();
 
 const GetFieldValuesSchema = z.object({
@@ -304,7 +305,7 @@ server.registerTool("affinity_update_field_value", {
   inputSchema: UpdateFieldValueSchema,
   annotations: { readOnlyHint: false, destructiveHint: false }
 }, async (params) => {
-  const res = await api.put(`/field-values`, params);
+  const res = await api.post(`/field-values`, params);
   return { content: [{ type: "text", text: `Field value updated successfully` }] };
 });
 
