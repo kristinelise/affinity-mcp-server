@@ -223,9 +223,19 @@ server.registerTool("affinity_create_note", {
   inputSchema: CreateNoteSchema,
   annotations: { readOnlyHint: false, destructiveHint: false }
 }, async (params) => {
-  const res = await api.post("/notes", params);
-  return { content: [{ type: "text", text: `Note created successfully (ID: ${res.data.id})` }] };
-});
+  const { parent_id, parent_type, content } = params;
+const body: Record<string, any> = { content };
+
+if (parent_type === "person") {
+  body.person_ids = [parent_id];
+} else if (parent_type === "organization") {
+  body.organization_ids = [parent_id];
+} else if (parent_type === "opportunity") {
+  body.opportunity_ids = [parent_id];
+}
+
+const res = await api.post("/notes", body);
+return { content: [{ type: "text", text: `Note created successfully (ID: ${res.data.id})` }] };
 
 server.registerTool("affinity_get_notes", {
   title: "Get Notes",
