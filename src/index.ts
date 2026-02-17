@@ -234,6 +234,7 @@ const body = {
 
 const res = await api.post("/notes", body);
 return { content: [{ type: "text", text: `Note created successfully (ID: ${res.data.id})` }] };
+});
 
 server.registerTool("affinity_get_notes", {
   title: "Get Notes",
