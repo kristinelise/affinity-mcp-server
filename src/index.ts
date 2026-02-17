@@ -108,7 +108,10 @@ const UpdateFieldValueSchema = z.object({
 }).strict();
 
 const GetFieldValuesSchema = z.object({
-  entity_id: z.number()
+  organization_id: z.number().optional(),
+  person_id: z.number().optional(),
+  opportunity_id: z.number().optional(),
+  list_entry_id: z.number().optional()
 }).strict();
 
 // PEOPLE TOOLS
@@ -300,22 +303,58 @@ server.registerTool("affinity_get_all_fields", {
 
 server.registerTool("affinity_get_field_values", {
   title: "Get Field Values",
-  description: "Get all field values for a person, organization, or opportunity",
+  description: "Get all field values for a person, organization, or opportunity. Provide exactly one of organization_id, person_id, or opportunity_id. Optionally include list_entry_id to get values for a specific list entry.",
   inputSchema: GetFieldValuesSchema,
   annotations: { readOnlyHint: true, destructiveHint: false }
 }, async (params) => {
-  const res = await api.get("/field-values", { params: { entity_id: params.entity_id } });
+  const queryParams: Record<string, number> = {};
+  if (params.organization_id) queryParams.organization_id = params.organization_id;
+  if (params.person_id) queryParams.person_id = params.person_id;
+  if (params.opportunity_id) queryParams.opportunity_id = params.opportunity_id;
+  if (params.list_entry_id) queryParams.list_entry_id = params.list_entry_id;
+  const res = await api.get("/field-values", { params: queryParams });
   return { content: [{ type: "text", text: JSON.stringify(res.data, null, 2) }] };
 });
 
 server.registerTool("affinity_update_field_value", {
   title: "Update Field Value",
-  description: "Update a custom field value for a person, organization, or opportunity",
+  description: "Create or update a custom field value for a person, organization, or opportunity. For list-specific fields, you must provide list_entry_id (the ID of the list entry, not the entity ID). The tool automatically detects whether to create a new value or update an existing one.",
   inputSchema: UpdateFieldValueSchema,
   annotations: { readOnlyHint: false, destructiveHint: false }
 }, async (params) => {
-  const res = await api.post(`/field-values`, params);
-  return { content: [{ type: "text", text: `Field value updated successfully` }] };
+  // First, check if a field value already exists for this field + entity combo
+  try {
+    const existing = await api.get("/field-values", {
+      params: {
+        ...(params.list_entry_id ? { list_entry_id: params.list_entry_id } : {}),
+        ...(params.entity_id ? { organization_id: params.entity_id } : {})
+      }
+    });
+
+    // Look for an existing value with the same field_id
+    const existingValue = Array.isArray(existing.data)
+      ? existing.data.find((fv: { field_id: number }) => fv.field_id === params.field_id)
+      : null;
+
+    if (existingValue) {
+      // Update existing value with PUT
+      const res = await api.put(`/field-values/${existingValue.id}`, { value: params.value });
+      return { content: [{ type: "text", text: `Field value updated successfully (ID: ${existingValue.id})` }] };
+    }
+  } catch {
+    // If lookup fails, fall through to create
+  }
+
+  // Create new field value with POST
+  const body: Record<string, unknown> = {
+    field_id: params.field_id,
+    entity_id: params.entity_id,
+    value: params.value
+  };
+  if (params.list_entry_id) body.list_entry_id = params.list_entry_id;
+
+  const res = await api.post("/field-values", body);
+  return { content: [{ type: "text", text: `Field value created successfully (ID: ${res.data.id})` }] };
 });
 
 async function main() {
